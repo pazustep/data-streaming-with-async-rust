@@ -1,4 +1,4 @@
-use async_std::stream::StreamExt;
+use async_std::prelude::*;
 use async_trait::async_trait;
 use chrono::prelude::*;
 use clap::Parser;
@@ -196,12 +196,16 @@ async fn main() -> std::io::Result<()> {
     let from: DateTime<Utc> = opts.from.parse().expect("Couldn't parse 'from' date");
     let to = Utc::now();
 
-    let mut s = async_std::stream::interval(Duration::from_secs(30))
-        .flat_map(|_| async_std::stream::from_iter(opts.symbols.split(',')))
-        .map(|symbol| handle_symbol_data(symbol, &from, &to));
+    let symbols: Vec<&str> = opts.symbols.split(',').collect();
+    let mut interval = async_std::stream::interval(Duration::from_secs(30));
 
-    while let Some(f) = s.next().await {
-        f.await;
+    while let Some(_) = interval.next().await {
+        let queries: Vec<_> = symbols
+            .iter()
+            .map(|&symbol| handle_symbol_data(symbol, &from, &to))
+            .collect();
+
+        let _ = futures::future::join_all(queries).await;
     }
 
     Ok(())
